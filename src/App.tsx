@@ -4,7 +4,7 @@ import { QuestionNavigation } from "./components/QuestionNavigation";
 import { questions as originalQuestions } from "./data/questions";
 import { shuffleArray } from "./utils/shuffle";
 import { supabase } from "./lib/supabase";
-import { RefreshCw, Send, AlertTriangle } from "lucide-react";
+import { RefreshCw, Send, AlertTriangle, BarChart3 } from "lucide-react";
 
 function App() {
   const [started, setStarted] = useState(false);
@@ -12,6 +12,8 @@ function App() {
   const [showAnswers, setShowAnswers] = useState(false);
   const [warningCount, setWarningCount] = useState(0);
   const [showWarningPopup, setShowWarningPopup] = useState(false);
+  const [showSubmitPopup, setShowSubmitPopup] = useState(false);
+  const [showEmptyPopup, setShowEmptyPopup] = useState(false);
   const [userId] = useState(
     () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   );
@@ -43,14 +45,16 @@ function App() {
     const answered = answers.size;
     const correct = correctAnswers.size;
     const incorrect = answered - correct;
-    return { answered, correct, incorrect };
-  }, [answers, correctAnswers]);
+    const percentage = questions.length
+      ? Math.round((correct / questions.length) * 100)
+      : 0;
+    return { answered, correct, incorrect, percentage };
+  }, [answers, correctAnswers, questions]);
 
-  // 🔒 Fullscreen handling + warnings
+  // 🔒 Fullscreen handling
   useEffect(() => {
     const handleFullscreenExit = () => {
       if (!started) return;
-
       if (!document.fullscreenElement) {
         setWarningCount((prev) => {
           const newCount = prev + 1;
@@ -111,17 +115,8 @@ function App() {
     });
   };
 
-  const handleSubmit = async () => {
-    if (answers.size === 0) {
-      alert("Please answer at least one question before submitting.");
-      return;
-    }
-
-    const confirmSubmit = window.confirm(
-      `You have answered ${answers.size} out of ${questions.length} questions. Submit now?`
-    );
-    if (!confirmSubmit) return;
-
+  const submitQuiz = async () => {
+    setShowSubmitPopup(false);
     setShowAnswers(true);
 
     try {
@@ -164,6 +159,14 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleSubmitClick = () => {
+    if (answers.size === 0) {
+      setShowEmptyPopup(true);
+      return;
+    }
+    setShowSubmitPopup(true);
+  };
+
   const handleReset = () => {
     const confirmReset = window.confirm(
       "Are you sure you want to restart the quiz? All your answers will be lost."
@@ -190,7 +193,7 @@ function App() {
     }
   };
 
-  // 🟢 Start Page (Before Fullscreen)
+  // 🟢 Start Page
   if (!started) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -207,19 +210,6 @@ function App() {
               This quiz will be conducted in fullscreen mode to ensure focus and
               prevent distractions.
             </p>
-          </div>
-
-          <div className="bg-slate-50 rounded-lg p-6 space-y-3 text-sm text-slate-700">
-            <h3 className="font-semibold text-slate-900 text-base mb-3">
-              Quiz Guidelines:
-            </h3>
-            <ul className="space-y-2">
-              <li>All 61 questions will be displayed on a single page</li>
-              <li>Questions and options are randomized on each refresh</li>
-              <li>You can answer questions in any order</li>
-              <li>Correct answers will be shown after submission</li>
-              <li>Your progress will be tracked throughout the quiz</li>
-            </ul>
           </div>
 
           <button
@@ -266,7 +256,7 @@ function App() {
                 </button>
                 {!showAnswers && (
                   <button
-                    onClick={handleSubmit}
+                    onClick={handleSubmitClick}
                     className="flex items-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition-colors shadow-lg"
                   >
                     <Send className="w-4 h-4" />
@@ -283,6 +273,59 @@ function App() {
               correctAnswers={correctAnswers}
             />
           </div>
+
+          {/* ✅ Show Progress Report after Submission */}
+          {showAnswers && (
+            <div className="w-full bg-white rounded-xl shadow-xl p-8 text-center space-y-4 border-t-4 border-slate-900 animate-fade-in">
+              <div className="flex justify-center">
+                <BarChart3 className="w-10 h-10 text-slate-900" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">
+                Quiz Progress Report
+              </h2>
+              <p className="text-slate-600">Here’s your performance summary:</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
+                <div className="bg-slate-100 rounded-lg p-4">
+                  <p className="text-slate-500">Attempted</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {stats.answered}
+                  </p>
+                </div>
+                <div className="bg-green-100 rounded-lg p-4">
+                  <p className="text-green-700">Correct</p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {stats.correct}
+                  </p>
+                </div>
+                <div className="bg-red-100 rounded-lg p-4">
+                  <p className="text-red-700">Wrong</p>
+                  <p className="text-2xl font-bold text-red-700">
+                    {stats.incorrect}
+                  </p>
+                </div>
+                <div className="bg-amber-100 rounded-lg p-4">
+                  <p className="text-amber-700">Score %</p>
+                  <p className="text-2xl font-bold text-amber-700">
+                    {stats.percentage}%
+                  </p>
+                </div>
+              </div>
+
+              {stats.percentage >= 80 ? (
+                <p className="text-green-700 font-semibold mt-4 text-lg">
+                  🎉 Excellent! You scored above 80%.
+                </p>
+              ) : (
+                <button
+                  onClick={handleReset}
+                  className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-200 shadow-lg"
+                >
+                  Practice Again
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Questions */}
           <div className="w-full space-y-8">
@@ -302,62 +345,76 @@ function App() {
         </div>
       </main>
 
-      {/* ✅ Fixed Footer Progress Bar */}
-      {!showAnswers && (
-        <footer className="fixed bottom-0 left-0 w-full bg-slate-900 text-white py-3 px-6 flex justify-between items-center shadow-lg">
-          <p className="text-sm">
-            Progress:{" "}
-            <span className="font-semibold">
-              {stats.answered}/{questions.length} answered
-            </span>
-          </p>
-          <button
-            onClick={handleSubmit}
-            className="flex items-center gap-2 bg-white text-slate-900 font-semibold px-5 py-2 rounded-lg hover:bg-slate-100 transition-colors"
-          >
-            <Send className="w-4 h-4" />
-            Submit Quiz
-          </button>
-        </footer>
-      )}
-
-      {/* ⚠️ Fullscreen Exit Warning Popup */}
+      {/* ⚠️ Fullscreen Exit Warning */}
       {showWarningPopup && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg p-6 text-center max-w-sm w-full space-y-4">
-            <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
-            <h2 className="text-lg font-semibold text-slate-900">
-              You exited fullscreen
-            </h2>
-            <p className="text-sm text-slate-600">
-              Please click OK to re-enter fullscreen and continue the quiz.
-            </p>
-            <p className="text-xs text-red-500 font-medium">
-              Warning {warningCount}/3
-            </p>
-
-            <div className="flex justify-center gap-4 mt-3">
-              <button
-                onClick={reEnterFullscreen}
-                className="bg-slate-900 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition-colors duration-200"
-              >
-                OK
-              </button>
-              <button
-                onClick={() => {
-                  document.exitFullscreen();
-                  setShowWarningPopup(false);
-                  setStarted(false);
-                  setWarningCount(0);
-                }}
-                className="bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200"
-              >
-                Exit Quiz
-              </button>
-            </div>
-          </div>
-        </div>
+        <Popup
+          title="You exited fullscreen"
+          description="Please click OK to re-enter fullscreen and continue the quiz."
+          extra={`Warning ${warningCount}/3`}
+          onConfirm={reEnterFullscreen}
+          onCancel={() => {
+            document.exitFullscreen();
+            setShowWarningPopup(false);
+            setStarted(false);
+            setWarningCount(0);
+          }}
+          confirmText="OK"
+          cancelText="Exit Quiz"
+        />
       )}
+
+      {/* 🧾 Submit Confirmation */}
+      {showSubmitPopup && (
+        <Popup
+          title="Submit Quiz?"
+          description={`You have answered ${answers.size} of ${questions.length} questions. Do you want to submit now?`}
+          onConfirm={submitQuiz}
+          onCancel={() => setShowSubmitPopup(false)}
+          confirmText="Submit"
+          cancelText="Cancel"
+        />
+      )}
+
+      {/* ❗ Empty Submission Popup */}
+      {showEmptyPopup && (
+        <Popup
+          title="No Answers Found"
+          description="Please answer at least one question before submitting."
+          onConfirm={() => setShowEmptyPopup(false)}
+          confirmText="OK"
+        />
+      )}
+    </div>
+  );
+}
+
+// 🧩 Reusable Popup Component
+function Popup({ title, description, onConfirm, onCancel, confirmText, cancelText, extra }: any) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-lg p-6 text-center max-w-sm w-full space-y-4">
+        <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        <p className="text-sm text-slate-600">{description}</p>
+        {extra && <p className="text-xs text-red-500 font-medium">{extra}</p>}
+
+        <div className="flex justify-center gap-4 mt-3">
+          {cancelText && (
+            <button
+              onClick={onCancel}
+              className="bg-slate-200 text-slate-800 px-5 py-2 rounded-lg hover:bg-slate-300 transition-colors duration-200"
+            >
+              {cancelText}
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className="bg-slate-900 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition-colors duration-200"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
