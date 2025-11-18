@@ -14,6 +14,7 @@ function App() {
   const [showWarningPopup, setShowWarningPopup] = useState(false);
   const [showSubmitPopup, setShowSubmitPopup] = useState(false);
   const [showEmptyPopup, setShowEmptyPopup] = useState(false);
+
   const [userId] = useState(
     () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   );
@@ -51,7 +52,7 @@ function App() {
     return { answered, correct, incorrect, percentage };
   }, [answers, correctAnswers, questions]);
 
-  // 🔒 Fullscreen handling
+  // FULLSCREEN VIOLATION HANDLING
   useEffect(() => {
     const handleFullscreenExit = () => {
       if (!started) return;
@@ -61,7 +62,7 @@ function App() {
           if (newCount < 3) {
             setShowWarningPopup(true);
           } else {
-            alert("You have exited fullscreen 3 times. The quiz will restart.");
+            alert("You exited fullscreen 3 times. Restarting quiz.");
             window.location.reload();
           }
           return newCount;
@@ -88,6 +89,16 @@ function App() {
     };
   }, [started]);
 
+  // LISTENER FOR DRAWER SUBMIT BUTTON
+  useEffect(() => {
+    const handleDrawerSubmit = () => handleSubmitClick();
+    window.addEventListener("submit-quiz", handleDrawerSubmit);
+
+    return () => {
+      window.removeEventListener("submit-quiz", handleDrawerSubmit);
+    };
+  }, [answers]);
+
   const handleOptionToggle = (questionId: number, option: string) => {
     const question = questions.find((q) => q.id === questionId);
     if (!question) return;
@@ -101,11 +112,8 @@ function App() {
       } else {
         if (current.includes(option)) {
           const filtered = current.filter((o) => o !== option);
-          if (filtered.length === 0) {
-            newAnswers.delete(questionId);
-          } else {
-            newAnswers.set(questionId, filtered);
-          }
+          if (filtered.length === 0) newAnswers.delete(questionId);
+          else newAnswers.set(questionId, filtered);
         } else {
           newAnswers.set(questionId, [...current, option]);
         }
@@ -130,10 +138,7 @@ function App() {
         .select()
         .maybeSingle();
 
-      if (attemptError) {
-        console.error("Error saving attempt:", attemptError);
-        return;
-      }
+      if (attemptError) console.error("Error saving attempt:", attemptError);
 
       if (attemptData) {
         const responses = Array.from(answers.entries()).map(
@@ -145,15 +150,10 @@ function App() {
           })
         );
 
-        const { error: responsesError } = await supabase
-          .from("question_responses")
-          .insert(responses);
-
-        if (responsesError)
-          console.error("Error saving responses:", responsesError);
+        await supabase.from("question_responses").insert(responses);
       }
     } catch (error) {
-      console.error("Error submitting quiz:", error);
+      console.error("Quiz submit error:", error);
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -168,32 +168,26 @@ function App() {
   };
 
   const handleReset = () => {
-    const confirmReset = window.confirm(
-      "Are you sure you want to restart the quiz? All your answers will be lost."
-    );
-    if (confirmReset) window.location.reload();
+    if (confirm("Reset the quiz? All answers will be cleared.")) {
+      window.location.reload();
+    }
   };
 
   const enterFullscreen = async () => {
     try {
       await document.documentElement.requestFullscreen();
-      setStarted(true);
-    } catch (error) {
-      console.error("Failed to enter fullscreen:", error);
-      setStarted(true);
-    }
+    } catch {}
+    setStarted(true);
   };
 
   const reEnterFullscreen = async () => {
     try {
       await document.documentElement.requestFullscreen();
-      setShowWarningPopup(false);
-    } catch (error) {
-      console.error("Re-enter fullscreen failed:", error);
-    }
+    } catch {}
+    setShowWarningPopup(false);
   };
 
-  // 🟢 Start Page
+  // START SCREEN
   if (!started) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -207,14 +201,13 @@ function App() {
               SAP Fiori Certification Quiz
             </h1>
             <p className="text-lg text-slate-600">
-              This quiz will be conducted in fullscreen mode to ensure focus and
-              prevent distractions.
+              This quiz runs in fullscreen mode to avoid distractions.
             </p>
           </div>
 
           <button
             onClick={enterFullscreen}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-4 px-6 rounded-lg transition shadow-lg"
           >
             Start Quiz in Fullscreen
           </button>
@@ -223,9 +216,9 @@ function App() {
     );
   }
 
-  // 🟡 Main Quiz Page
+  // MAIN QUIZ PAGE
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 flex flex-col justify-between">
+    <div className="min-h-screen bg-slate-100 flex flex-col justify-between">
       <main className="flex-grow w-full max-w-5xl mx-auto px-6 py-10 pb-24">
         <header className="text-center mb-10">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">
@@ -235,7 +228,7 @@ function App() {
         </header>
 
         <div className="flex flex-col items-center space-y-8">
-          {/* Navigation Section */}
+          {/* Navigation Panel */}
           <div className="w-full bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -243,21 +236,23 @@ function App() {
                   All Questions ({questions.length})
                 </h2>
                 <p className="text-slate-600 mt-1">
-                  Answer questions in any order. Questions and options are randomized.
+                  Randomized questions & options.
                 </p>
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={handleReset}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg"
                 >
                   <RefreshCw className="w-4 h-4" />
                   Reset
                 </button>
+
                 {!showAnswers && (
                   <button
                     onClick={handleSubmitClick}
-                    className="flex items-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition-colors shadow-lg"
+                    className="flex items-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 
+                    text-white rounded-lg shadow-lg"
                   >
                     <Send className="w-4 h-4" />
                     Submit Quiz
@@ -274,23 +269,19 @@ function App() {
             />
           </div>
 
-          {/* ✅ Show Progress Report after Submission */}
+          {/* Progress after submitting */}
           {showAnswers && (
-            <div className="w-full bg-white rounded-xl shadow-xl p-8 text-center space-y-4 border-t-4 border-slate-900 animate-fade-in">
-              <div className="flex justify-center">
-                <BarChart3 className="w-10 h-10 text-slate-900" />
-              </div>
+            <div className="w-full bg-white rounded-xl shadow-xl p-8 text-center border-t-4 border-slate-900">
+              <BarChart3 className="w-10 h-10 text-slate-900 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-slate-900">
                 Quiz Progress Report
               </h2>
-              <p className="text-slate-600">Here’s your performance summary:</p>
+              <p className="text-slate-600">Here is your performance:</p>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
                 <div className="bg-slate-100 rounded-lg p-4">
                   <p className="text-slate-500">Attempted</p>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {stats.answered}
-                  </p>
+                  <p className="text-2xl font-bold">{stats.answered}</p>
                 </div>
                 <div className="bg-green-100 rounded-lg p-4">
                   <p className="text-green-700">Correct</p>
@@ -313,13 +304,13 @@ function App() {
               </div>
 
               {stats.percentage >= 80 ? (
-                <p className="text-green-700 font-semibold mt-4 text-lg">
-                  🎉 Excellent! You scored above 80%.
+                <p className="text-green-700 font-semibold text-lg mt-4">
+                  🎉 Great job! You scored above 80%.
                 </p>
               ) : (
                 <button
                   onClick={handleReset}
-                  className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-200 shadow-lg"
+                  className="mt-4 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700"
                 >
                   Practice Again
                 </button>
@@ -327,7 +318,7 @@ function App() {
             </div>
           )}
 
-          {/* Questions */}
+          {/* All Questions */}
           <div className="w-full space-y-8">
             {questions.map((question, index) => (
               <QuizQuestion
@@ -342,14 +333,27 @@ function App() {
               />
             ))}
           </div>
+
+          {/* Bottom Submit Button */}
+          {!showAnswers && (
+            <div className="w-full flex justify-center mt-10">
+              <button
+                onClick={handleSubmitClick}
+                className="flex items-center gap-2 px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-lg"
+              >
+                <Send className="w-5 h-5" />
+                Submit Quiz
+              </button>
+            </div>
+          )}
         </div>
       </main>
 
-      {/* ⚠️ Fullscreen Exit Warning */}
+      {/* FULLSCREEN EXIT WARNING POPUP */}
       {showWarningPopup && (
         <Popup
           title="You exited fullscreen"
-          description="Please click OK to re-enter fullscreen and continue the quiz."
+          description="Click OK to continue the quiz."
           extra={`Warning ${warningCount}/3`}
           onConfirm={reEnterFullscreen}
           onCancel={() => {
@@ -363,11 +367,11 @@ function App() {
         />
       )}
 
-      {/* 🧾 Submit Confirmation */}
+      {/* SUBMIT CONFIRMATION */}
       {showSubmitPopup && (
         <Popup
           title="Submit Quiz?"
-          description={`You have answered ${answers.size} of ${questions.length} questions. Do you want to submit now?`}
+          description={`You answered ${answers.size} of ${questions.length} questions.`}
           onConfirm={submitQuiz}
           onCancel={() => setShowSubmitPopup(false)}
           confirmText="Submit"
@@ -375,11 +379,11 @@ function App() {
         />
       )}
 
-      {/* ❗ Empty Submission Popup */}
+      {/* EMPTY SUBMISSION WARNING */}
       {showEmptyPopup && (
         <Popup
           title="No Answers Found"
-          description="Please answer at least one question before submitting."
+          description="Please attempt at least one question."
           onConfirm={() => setShowEmptyPopup(false)}
           confirmText="OK"
         />
@@ -388,28 +392,35 @@ function App() {
   );
 }
 
-// 🧩 Reusable Popup Component
-function Popup({ title, description, onConfirm, onCancel, confirmText, cancelText, extra }: any) {
+function Popup({
+  title,
+  description,
+  onConfirm,
+  onCancel,
+  confirmText,
+  cancelText,
+  extra,
+}: any) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-lg p-6 text-center max-w-sm w-full space-y-4">
         <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
         <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
         <p className="text-sm text-slate-600">{description}</p>
-        {extra && <p className="text-xs text-red-500 font-medium">{extra}</p>}
+        {extra && <p className="text-xs text-red-500">{extra}</p>}
 
         <div className="flex justify-center gap-4 mt-3">
           {cancelText && (
             <button
               onClick={onCancel}
-              className="bg-slate-200 text-slate-800 px-5 py-2 rounded-lg hover:bg-slate-300 transition-colors duration-200"
+              className="bg-slate-200 text-slate-800 px-5 py-2 rounded-lg hover:bg-slate-300"
             >
               {cancelText}
             </button>
           )}
           <button
             onClick={onConfirm}
-            className="bg-slate-900 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition-colors duration-200"
+            className="bg-slate-900 text-white px-5 py-2 rounded-lg hover:bg-slate-800"
           >
             {confirmText}
           </button>
