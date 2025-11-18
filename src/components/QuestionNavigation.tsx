@@ -72,7 +72,9 @@ export function QuestionNavigation({
           {/* Summary Section */}
           <div className="mb-4 text-sm font-medium text-slate-700 flex justify-between">
             <span className="text-green-600">Attempted: {attemptedCount}</span>
-            <span className="text-red-600">Not Attempted: {notAttemptedCount}</span>
+            <span className="text-red-600">
+              Not Attempted: {notAttemptedCount}
+            </span>
           </div>
 
           {/* Grid of Question Buttons */}
@@ -113,6 +115,21 @@ export function QuestionNavigation({
             })}
           </div>
         </div>
+
+        {/* Submit Button inside Drawer */}
+        {!showAnswers && (
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              const event = new CustomEvent("submit-quiz");
+              window.dispatchEvent(event);
+            }}
+            className="w-full mt-6 bg-slate-900 text-white py-3 rounded-lg 
+               font-semibold shadow-md hover:bg-slate-800 transition-all"
+          >
+            Submit Quiz
+          </button>
+        )}
 
         {/* Footer Section */}
         <footer className="mt-6 text-center text-sm text-slate-600 border-t border-slate-200 pt-4">
